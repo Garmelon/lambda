@@ -5,6 +5,7 @@ import Data.List
 data Symbol = Symbol { symBase :: String -- lowercase a to z
                      , symLen  :: Int    -- nonnegative
                      }
+  deriving (Eq)
 
 instance Show Symbol where
   show (Symbol s n) = s ++ (replicate n '\'')
@@ -30,6 +31,28 @@ instance (Show s) => Show (Expression s) where
   show (EExpr a b) = "(" ++ show a ++ " " ++ show b ++ ")"
   show (ELambda s e) = "\\" ++ show s ++ "." ++ show e
 
+{-
+Apply a function
+Insert an expression into another expression:
+  replace all symbols s with an expression
+  change all symbols within that expression to be unique in the expression's new context
+-}
+makeUnique :: [Symbol] -> Expression Symbol -> Expression Symbol
+makeUnique context (ESymbol s) = ESymbol (findName context s)
+makeUnique context (EExpr a b) = EExpr (makeUnique context a) (makeUnique context b)
+makeUnique context (ELambda l e) = ELambda (findName context l) (makeUnique context e)
+
+insertExpr :: Symbol -> Expression Symbol -> [Symbol] -> Expression Symbol -> Expression Symbol
+insertExpr r new context old@(ESymbol s)
+  | r == s    = new
+  | otherwise = old
+insertExpr r new context (EExpr a b) = EExpr (insertExpr r new context a) (insertExpr r new context b)
+insertExpr r new context (ELambda l e) = ELambda l (insertExpr r new (l : context) e)
+
+apply :: Expression Symbol -> Expression Symbol
+apply (EExpr (ELambda s l) b) =  insertExpr s b [] l -- [], not [s]
+apply e = e
+
 _s :: String -> Expression Symbol
 _s s = ESymbol $ Symbol s 0
 
@@ -47,4 +70,3 @@ main = do
   print $ findName [(Symbol "a" 0), (Symbol "b" 0), (Symbol "a" 1)] (Symbol "b" 3)
   print $ findName [(Symbol "a" 0), (Symbol "b" 0), (Symbol "a" 1)] (Symbol "c" 2)
   print $ findName [(Symbol "a" 1), (Symbol "a" 3), (Symbol "a" 0)] (Symbol "a" 1)
-
