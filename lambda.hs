@@ -1,3 +1,4 @@
+-- I removed the line at the bottom, now we can also remove this line. ~G
 import Data.List
 import Data.Maybe
 
@@ -103,6 +104,12 @@ apply e = e
 step :: (Symbol s) => Expression s -> Expression s
 step = simplify . apply
 
+takeWhileUnique :: (Eq a) => [a] -> [a]
+takeWhileUnique l = map fst $ takeWhile (\a -> not $ fst a `elem` snd a) $ zip l (inits l)
+
+evaluate :: (Symbol s) => Expression s -> [Expression s]
+evaluate = takeWhileUnique . iterate apply
+
 _sa = flip SymApostrophe 0
 _sl = SymLetter
 _ea s = ESymbol $ _sa s
@@ -179,3 +186,7 @@ main = do
   printTopLevel . step . step $ (EExpr nl tl)
   printTopLevel . step . step . step $ (EExpr nl tl)
   putStrLn ""
+  
+  putStrLn "-----"
+  mapM_ printTopLevel $ evaluate (EExpr nl tl)
+  putStrLn "-----"
