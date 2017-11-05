@@ -6,6 +6,9 @@ class (Eq s) => Symbol s where
   -- Present symbols (not including symbol to change) -> symbol to change ->
   --   simplest unique symbol
   findName :: [s] -> s -> s
+  
+  numberUniquely :: [Int] -> s -> Int
+  numberUniquely context _ = head $ [1..] \\ (nub context)
 
 -- Symbol that appends apostrophes to become unique
 data SymApostrophe = SymApostrophe { symApoBase :: String -- lowercase a to z
@@ -53,6 +56,13 @@ instance (Show s) => Show (Expression s) where
   show (EExpr a b) = "(" ++ show a ++ " " ++ show b ++ ")"
   show (ELambda s e) = "\\" ++ show s ++ "." ++ show e
 
+instance (Symbol s) => Eq (Expression s) where
+  a == b = cmp (contextMap numberUniquely [] a) (contextMap numberUniquely [] b)
+    where cmp (ESymbol s1) (ESymbol s2) = s1 == s2
+          cmp (EExpr a1 b1) (EExpr a2 b2) = cmp a1 a2 && cmp b1 b2
+          cmp (ELambda s1 e1) (ELambda s2 e2) = s1 == s2 && cmp e1 e2
+          cmp _ _ = False
+
 showTopLevel :: (Show s) => Expression s -> String
 showTopLevel e@(EExpr _ _) = tail . init . show $ e
 showTopLevel e = show e
@@ -60,7 +70,7 @@ showTopLevel e = show e
 printTopLevel :: (Show s) => Expression s -> IO ()
 printTopLevel = putStrLn . showTopLevel
 
-contextMap :: (Symbol s, Symbol t) => ([t] -> s -> t) -> [t] -> Expression s -> Expression t
+contextMap :: (Eq s, Eq t) => ([t] -> s -> t) -> [t] -> Expression s -> Expression t
 contextMap f context e = helper f [] context e
   where helper f mapping context (ESymbol s) = ESymbol $ fromMaybe (f context s) $ lookup s mapping
         helper f mapping context (EExpr a b) = EExpr (helper f mapping context a) (helper f mapping context b)
