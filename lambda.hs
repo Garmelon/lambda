@@ -1,5 +1,6 @@
 
 import Data.List
+import Data.Maybe
 
 -- A symbol denoting a variable; consists of a textual name and some (or no) apostrophes to ensure uniqueness
 data Symbol = Symbol { symBase :: String -- lowercase a to z
@@ -36,6 +37,7 @@ Apply a function
 Insert an expression into another expression:
   replace all symbols s with an expression
   change all symbols within that expression to be unique in the expression's new context
+  simplify all symbols
 -}
 makeUnique :: [Symbol] -> Expression Symbol -> Expression Symbol
 makeUnique context (ESymbol s) = ESymbol (findName context s)
@@ -49,10 +51,19 @@ insertExpr r new context old@(ESymbol s)
 insertExpr r new context (EExpr a b) = EExpr (insertExpr r new context a) (insertExpr r new context b)
 insertExpr r new context (ELambda l e) = ELambda l (insertExpr r new (l : context) e)
 
+simplify :: [Symbol] -> [(Symbol, Symbol)] -> Expression Symbol -> Expression Symbol
+simplify context mapping (ESymbol s) = ESymbol $ fromMaybe (findName context s) $ lookup s mapping
+simplify context mapping (EExpr a b) = EExpr (simplify context mapping a) (simplify context mapping b)
+simplify context mapping (ELambda l e) =
+  let newl = findName context l
+  in  ELambda newl (simplify (l : context) ((l, newl) : mapping) e)
+
 apply :: Expression Symbol -> Expression Symbol
 apply (EExpr (ELambda s l) b) = insertExpr s b [] l -- [], not [s]
 apply (EExpr a@(EExpr _ _) b) = EExpr (apply a) b
 apply e = e
+
+step = simplify [] [] . apply
 
 _s :: String -> Expression Symbol
 _s s = ESymbol $ _ss s
@@ -86,9 +97,18 @@ main = do
   print t
   print f
   print n
+  print $ simplify [] [] $ (ELambda (Symbol "a" 1) (ESymbol (Symbol "a" 1)))
+  putStrLn ""
+  
   putStrLn "Running: not false"
   print (EExpr n f)
-  print . apply $ (EExpr n f)
-  print . apply . apply $ (EExpr n f)
-  print . apply . apply . apply $ (EExpr n f)
+  print . step $ (EExpr n f)
+  print . step . step $ (EExpr n f)
+  print . step . step . step $ (EExpr n f)
+  
+  putStrLn "Running: not true"
+  print (EExpr n t)
+  print . step $ (EExpr n t)
+  print . step . step $ (EExpr n t)
+  print . step . step . step $ (EExpr n t)
   putStrLn ""
