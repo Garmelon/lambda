@@ -35,13 +35,13 @@ instance Symbol SymLetter where
     let bases = map symLetBase other
         freeBases = names \\ (nub bases)
     in  SymLetter (head freeBases)
-      where letters = ['a'..'z']
-            namesN 0 = [""]
-            namesN n = [n ++ [l] | n <- namesN (n - 1), l <- letters]
+      where namesN 0 = [""]
+            namesN n = [n ++ [l] | n <- namesN (n - 1), l <- ['a'..'z']]
             names = concatMap namesN [1..]
 
 
 -- An expression. Can be a mere symbol, a lambda application, or a lambda abstraction.
+-- re. "a lambda application": (a b) is also a valid expression, even though nothing is applied here ~G
 data Expression s = ESymbol s
                   | EExpr   (Expression s) (Expression s)
                   | ELambda s (Expression s)
@@ -60,37 +60,33 @@ showTopLevel e = show e
 printTopLevel :: (Show s) => Expression s -> IO ()
 printTopLevel = putStrLn . showTopLevel
 
-{-
-Apply a function
-Insert an expression into another expression:
-  replace all symbols s with an expression
-  change all symbols within that expression to be unique in the expression's new context
-  simplify all symbols
--}
-simplifyExpr :: (Symbol s) => [(s, s)] -> [s] -> Expression s -> Expression s
-simplifyExpr mapping context (ESymbol s) = ESymbol $ fromMaybe (findName context s) $ lookup s mapping
-simplifyExpr mapping context (EExpr a b) = EExpr (simplifyExpr mapping context a) (simplifyExpr mapping context b)
-simplifyExpr mapping context (ELambda l e) =
-  let newl = findName context l
-      newmapping = (l, newl) : mapping
-      newcontext = newl : context
-  in  ELambda newl (simplifyExpr newmapping newcontext e)
+contextMap :: (Symbol s, Symbol t) => ([t] -> s -> t) -> [t] -> Expression s -> Expression t
+contextMap f context e = helper f [] context e
+  where helper f mapping context (ESymbol s) = ESymbol $ fromMaybe (f context s) $ lookup s mapping
+        helper f mapping context (EExpr a b) = EExpr (helper f mapping context a) (helper f mapping context b)
+        helper f mapping context (ELambda s e) =
+          let news = f context s
+              newmapping = (s, news) : mapping
+              newcontext = news : context
+          in  ELambda news (helper f newmapping newcontext e)
 
 makeUnique :: (Symbol s) => [s] -> Expression s -> Expression s
-makeUnique = simplifyExpr []
+makeUnique = contextMap findName
 
 simplify :: (Symbol s) => Expression s -> Expression s
 simplify = makeUnique []
 
-insertExpr :: (Symbol s) => s -> Expression s -> [s] -> Expression s -> Expression s
-insertExpr r new context old@(ESymbol s)
-  | r == s    = makeUnique context new
-  | otherwise = old
-insertExpr r new context (EExpr a b) = EExpr (insertExpr r new context a) (insertExpr r new context b)
-insertExpr r new context (ELambda l e) = ELambda l (insertExpr r new (l : context) e)
+-- symbol to replace -> expression to replace symbol with -> expression to replace in -> resulting epression
+replaceIn :: (Symbol s) => s -> Expression s -> Expression s -> Expression s
+replaceIn = helper []
+  where helper context replace new old@(ESymbol s)
+          | replace == s = makeUnique context new
+          | otherwise    = old
+        helper context replace new (EExpr a b) = EExpr (helper context replace new a) (helper context replace new b)
+        helper context replace new (ELambda s e) = ELambda s (helper (s : context) replace new e)
 
 apply :: (Symbol s) => Expression s -> Expression s
-apply (EExpr (ELambda s l) b) = insertExpr s b [] l -- [], not [s]
+apply (EExpr (ELambda s a) b) = replaceIn s b a -- replace s with b in a
 apply (EExpr a@(EExpr _ _) b) = EExpr (apply a) b
 apply e = e
 
