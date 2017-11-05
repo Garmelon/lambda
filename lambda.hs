@@ -44,19 +44,24 @@ makeUnique context (ELambda l e) = ELambda (findName context l) (makeUnique cont
 
 insertExpr :: Symbol -> Expression Symbol -> [Symbol] -> Expression Symbol -> Expression Symbol
 insertExpr r new context old@(ESymbol s)
-  | r == s    = new
+  | r == s    = makeUnique context new
   | otherwise = old
 insertExpr r new context (EExpr a b) = EExpr (insertExpr r new context a) (insertExpr r new context b)
 insertExpr r new context (ELambda l e) = ELambda l (insertExpr r new (l : context) e)
 
 apply :: Expression Symbol -> Expression Symbol
-apply (EExpr (ELambda s l) b) =  insertExpr s b [] l -- [], not [s]
+apply (EExpr (ELambda s l) b) = insertExpr s b [] l -- [], not [s]
+apply (EExpr a@(EExpr _ _) b) = EExpr (apply a) b
 apply e = e
 
 _s :: String -> Expression Symbol
-_s s = ESymbol $ Symbol s 0
+_s s = ESymbol $ _ss s
+
+_ss :: String -> Symbol
+_ss s = Symbol s 0
 
 main = do
+  putStrLn "Testing: Showing expressions"
   print (EExpr (_s "a") (EExpr (_s "b") (_s "c")))
   print (EExpr (_s "a") (EExpr (_s "b") (EExpr (_s "c") (_s "d"))))
   print (EExpr (EExpr (_s "a") (_s "b")) (_s "c"))
@@ -64,9 +69,26 @@ main = do
   print (EExpr (EExpr (_s "a") (EExpr (_s "b") (_s "c"))) (_s "d"))
   print (ELambda (Symbol "a" 0) (_s "a"))
   print (ELambda (Symbol "a" 0) (EExpr (EExpr (_s "a") (EExpr (_s "b") (_s "c"))) (_s "d")))
+  putStrLn ""
   
   -- test of findName (seems to be working) ~G
+  putStrLn "Testing: Finding new symbols"
   print $ findName [(Symbol "a" 0), (Symbol "b" 0), (Symbol "a" 1)] (Symbol "a" 4)
   print $ findName [(Symbol "a" 0), (Symbol "b" 0), (Symbol "a" 1)] (Symbol "b" 3)
   print $ findName [(Symbol "a" 0), (Symbol "b" 0), (Symbol "a" 1)] (Symbol "c" 2)
   print $ findName [(Symbol "a" 1), (Symbol "a" 3), (Symbol "a" 0)] (Symbol "a" 1)
+  putStrLn ""
+  
+  putStrLn "Testing: Applying expressions"
+  let t = (ELambda (_ss "a") (ELambda (_ss "b") (ESymbol (_ss "a"))))
+      f = (ELambda (_ss "a") (ELambda (_ss "b") (ESymbol (_ss "b"))))
+      n = (ELambda (_ss "a") (EExpr (EExpr (ESymbol (_ss "a")) (makeUnique [(_ss "a")] f)) (makeUnique [(_ss "a")] t)))
+  print t
+  print f
+  print n
+  putStrLn "Running: not false"
+  print (EExpr n f)
+  print . apply $ (EExpr n f)
+  print . apply . apply $ (EExpr n f)
+  print . apply . apply . apply $ (EExpr n f)
+  putStrLn ""
