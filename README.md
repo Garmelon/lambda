@@ -1,3 +1,3 @@
 # lambda
 
-Interpret simple labda calculus expressions
+Interpret simple lambda calculus expressions
