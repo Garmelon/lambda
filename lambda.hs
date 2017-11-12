@@ -33,8 +33,12 @@ instance (Show s) => Show (Expression s) where
           show_ c (ELambda s e@(EExpr _ _)) = "\\" ++ s ++ ".(" ++ show_ (s : c) e ++ ")"
           show_ c (ELambda s e)             = "\\" ++ s ++ "."  ++ show_ (s : c) e
 
-instance (Eq s) => Eq (Expression s) where
-  -- TODO: Implement this
+instance Eq (Expression s) where
+  (ESymbol _)    == (ESymbol _)    = True
+  (EReference a) == (EReference b) = a == b
+  (EExpr a b)    == (EExpr c d)    = a == c && b == d
+  (ELambda _ a)  == (ELambda _ b)  = a == b
+  _              == _              = False
 
 insertExpr :: Expression s -> Expression s -> Expression s
 insertExpr = insert_ 0
