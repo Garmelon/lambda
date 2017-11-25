@@ -58,25 +58,19 @@ renameUniquely = rename_ []
                                    in  ELambda name (rename_ (name : c) e)
 
 display :: (Show s) => Bool -> Expression s -> String
-display unicode = display_ [] . renameUniquely
-  where display_ c (EReference n)
+display unicode = d [] . renameUniquely
+  where l = if unicode then "λ" else "\\"
+        d c (EReference n)
           | n >= 0 && n < length c = c !! n
-          | otherwise              = "ERR" -- TODO: Deal with errors properly?
-        display_ c (ESymbol s) = s
-        display_ c (ELambda s e) =
-          (if unicode then "λ" else "\\") ++ s ++ "."  ++ display_ (s : c) e
-        display_ c (EExpr a@(ELambda _ _) b@(ELambda _ _)) =
-          "(" ++ display_ c a ++ ") (" ++ display_ c b ++ ")"
-        display_ c (EExpr a@(ELambda _ _) b@(EExpr   _ _)) =
-          "(" ++ display_ c a ++ ") (" ++ display_ c b ++ ")"
-        display_ c (EExpr a@(ELambda _ _) b              ) =
-          "(" ++ display_ c a ++ ") "  ++ display_ c b
-        display_ c (EExpr a               b@(ELambda _ _)) =
-                 display_ c a ++  " (" ++ display_ c b ++ ")"
-        display_ c (EExpr a               b@(EExpr   _ _)) =
-                 display_ c a ++  " (" ++ display_ c b ++ ")"
-        display_ c (EExpr a               b)               =
-                 display_ c a ++  " "  ++ display_ c b
+          | otherwise              = "ERR"
+        d c (ESymbol s) = s
+        d c (ELambda s e@(ELambda _ _)) = l ++ s ++ " " ++ (tail $ d (s:c) e)
+        d c (ELambda s e)               = l ++ s ++ "." ++         d (s:c) e
+        d c (EExpr a@(ELambda _ _) b@(ELambda _ _)) = "(" ++ d c a ++ ") (" ++ d c b ++ ")"
+        d c (EExpr a@(ELambda _ _) b@(EExpr _ _)  ) = "(" ++ d c a ++ ") (" ++ d c b ++ ")"
+        d c (EExpr a               b@(ELambda _ _)) =        d c a ++  " (" ++ d c b ++ ")"
+        d c (EExpr a               b@(EExpr _ _)  ) =        d c a ++  " (" ++ d c b ++ ")"
+        d c (EExpr a               b              ) =        d c a ++  " "  ++ d c b
 
 {-
  - Evaluating expressions
@@ -136,19 +130,22 @@ parenthesize parser = do
   satisfy $ isClosingParen paren
   return result
 
-parseSymbol :: ReadP (Expression String)
-parseSymbol = do
+parseSymbolStr :: ReadP String
+parseSymbolStr = do
   a <- munch1 (`elem` ['a'..'z'])
-  b <- munch (=='\'')
-  return $ ESymbol (a ++ b)
+  b <- munch (== '\'')
+  return $ a ++ b
+
+parseSymbol :: ReadP (Expression String)
+parseSymbol = parseSymbolStr >>= (return . ESymbol)
 
 parseLambda :: ReadP (Expression String)
 parseLambda = do
   char '\\' +++ char 'λ'
-  (ESymbol s) <- parseSymbol
+  symbols <- many1' $ between skipSpaces skipSpaces parseSymbolStr
   char '.'
   e <- parseExpr
-  return $ ELambda s e
+  return $ foldr ELambda e symbols
 
 parseExpr :: ReadP (Expression String)
 parseExpr =
