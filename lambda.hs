@@ -159,7 +159,7 @@ maybeParseExpression s = do
           safeLast xs = Just $ last xs
 
 {-
- - Testing output
+ - Interactive evaluation
  -}
 
 -- Helper type for using arbitrary strings as symbols
@@ -171,67 +171,17 @@ instance Show StrSymbol where
 instance Eq StrSymbol where
   (StrSymbol a) == (StrSymbol b) = a == b
 
-{-
- - Interactive evaluation
- -}
-
 linewise :: (String -> String) -> String -> String
 linewise f = unlines . map f . lines
 
 evaluateExpression :: String -> String
 evaluateExpression s =
-  let result = maybeParseExpression s >>= return
-                                        . map show
-                                        . evaluate
-                                        . fmap StrSymbol
-      l = fromMaybe ["Error: Could not parse expression."] result
+  let result = return
+             . map show
+             . evaluate
+             . fmap StrSymbol
+      l = fromMaybe ["Error: Could not parse expression."]
+        $ maybeParseExpression s >>= result
   in  unlines l
--- evaluateExpression s = do
---   expr <- maybeParseExpression s
---   return . map show . evaluate expr
 
 main = interact $ linewise evaluateExpression
-
-{-
-_s = ESymbol
-_e = EExpr
-_r = EReference
-_l = ELambda
-_ss = StrSymbol
-
-main = do
-  putStrLn "Test nested expressions and parentheses"
-  print (_e (_e (_s 1) (_s 2)) (_e (_s 3) (_s 4)))
-  print (_e (_e (_s 1) (_e (_s 2) (_s 3))) (_s 4))
-  print (_e (_e (_l 1 (_r 0)) (_e (_l 2 (_r 0)) (_l 3 (_r 0)))) (_l 4 (_r 0)))
-  putStrLn "Test references and symbols in lambda expressions"
-  print (_l 5 (_l 2 (_e (_s 3) (_r 0))))
-  print (_l 5 (_l 2 (_e (_s 3) (_r 1))))
-  print (_l 5 (_l 2 (_e (_s 3) (_r 2)))) -- should fail in some way
-  putStrLn "More reference tests"
-  print (_l 1 (_e (_l 2 (_r 0)) (_l 3 (_r 1))))
-  print ((_r 0) :: Expression Int) -- should also fail in some way
-  putStrLn "Test insertion"
-  putStrLn "Testing Ints as symbols..."
-  let t = (_l 1 (_l 2 (_r 1)))
-      f = (_l 1 (_l 2 (_r 0)))
-      n = (_l 1 (_e (_e (_r 0) f) t))
-  print t
-  print f
-  print n
-  putStrLn "Evaluating... N T"
-  mapM_ print . evaluate $ (_e n t)
-  putStrLn "Evaluating... N F"
-  mapM_ print . evaluate $ (_e n f)
-  putStrLn "Testing StrSymbols as symbols..."
-  let st = (_l (_ss "a") (_l (_ss "b") (_r 1)))
-      sf = (_l (_ss "a") (_l (_ss "b") (_r 0)))
-      sn = (_l (_ss "n") (_e (_e (_r 0) sf) st))
-  print st
-  print sf
-  print sn
-  putStrLn "Evaluating... N T"
-  mapM_ print . evaluate $ (_e sn st)
-  putStrLn "Evaluating... N F"
-  mapM_ print . evaluate $ (_e sn sf)
--}
