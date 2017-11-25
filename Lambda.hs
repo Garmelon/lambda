@@ -1,9 +1,9 @@
--- module Lambda
--- ( Expression
--- , showExpression
--- , maybeParseExpression
--- , evaluateExpression
--- ) where
+module Lambda
+( Expression
+, display
+, parseMaybe
+, evaluate
+) where
 
 import Control.Monad
 import Data.List
@@ -57,20 +57,26 @@ renameUniquely = rename_ []
         rename_ c (ELambda s e)  = let name = makeUnique c . show $ s
                                    in  ELambda name (rename_ (name : c) e)
 
-showExpression :: (Show s) => Bool -> Expression s -> String
-showExpression unicode = show_ [] . renameUniquely
-  where show_ c (EReference n)
+display :: (Show s) => Bool -> Expression s -> String
+display unicode = display_ [] . renameUniquely
+  where display_ c (EReference n)
           | n >= 0 && n < length c = c !! n
           | otherwise              = "ERR" -- TODO: Deal with errors properly?
-        show_ c (ESymbol s)                             = s
-        show_ c (ELambda s e)                           = (if unicode then "λ" else "\\")
-                                                        ++ s ++ "."  ++ show_ (s : c) e
-        show_ c (EExpr a@(ELambda _ _) b@(ELambda _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
-        show_ c (EExpr a@(ELambda _ _) b@(EExpr   _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
-        show_ c (EExpr a@(ELambda _ _) b              ) = "(" ++ show_ c a ++ ") "  ++ show_ c b
-        show_ c (EExpr a               b@(ELambda _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
-        show_ c (EExpr a               b@(EExpr   _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
-        show_ c (EExpr a               b)               =        show_ c a ++  " "  ++ show_ c b
+        display_ c (ESymbol s) = s
+        display_ c (ELambda s e) =
+          (if unicode then "λ" else "\\") ++ s ++ "."  ++ display_ (s : c) e
+        display_ c (EExpr a@(ELambda _ _) b@(ELambda _ _)) =
+          "(" ++ display_ c a ++ ") (" ++ display_ c b ++ ")"
+        display_ c (EExpr a@(ELambda _ _) b@(EExpr   _ _)) =
+          "(" ++ display_ c a ++ ") (" ++ display_ c b ++ ")"
+        display_ c (EExpr a@(ELambda _ _) b              ) =
+          "(" ++ display_ c a ++ ") "  ++ display_ c b
+        display_ c (EExpr a               b@(ELambda _ _)) =
+                 display_ c a ++  " (" ++ display_ c b ++ ")"
+        display_ c (EExpr a               b@(EExpr   _ _)) =
+                 display_ c a ++  " (" ++ display_ c b ++ ")"
+        display_ c (EExpr a               b)               =
+                 display_ c a ++  " "  ++ display_ c b
 
 {-
  - Evaluating expressions
@@ -97,8 +103,8 @@ takeWhileUnique l = map fst
                   $ takeWhile (\a -> not $ fst a `elem` snd a)
                   $ zip l (inits l)
 
-evaluateExpression :: (Eq s) => Expression s -> [Expression s]
-evaluateExpression = takeWhileUnique . iterate apply
+evaluate :: (Eq s) => Expression s -> [Expression s]
+evaluate = takeWhileUnique . iterate apply
 
 {-
  - Parsing expressions
@@ -162,38 +168,10 @@ findReferences = find_ []
 removeApostrophes :: String -> String
 removeApostrophes = reverse . dropWhile (=='\'') . reverse
 
-maybeParseExpression :: String -> Maybe (Expression String)
-maybeParseExpression s = do
+parseMaybe :: String -> Maybe (Expression String)
+parseMaybe s = do
   let results = readP_to_S parseExpr s
   (expr, _) <- safeLast results
   return . fmap removeApostrophes . findReferences $ expr
     where safeLast [] = Nothing
           safeLast xs = Just $ last xs
-
-{-
- - Interactive evaluation
- -}
-
--- Helper type for using arbitrary strings as symbols
-newtype StrSymbol = StrSymbol String
-
-instance Show StrSymbol where
-  show (StrSymbol s) = s
-
-instance Eq StrSymbol where
-  (StrSymbol a) == (StrSymbol b) = a == b
-
-linewise :: (String -> String) -> String -> String
-linewise f = unlines . map f . lines
-
-evaluate :: String -> String
-evaluate s =
-  let result = return
-             . map (showExpression True)
-             . evaluateExpression
-             . fmap StrSymbol
-      l = fromMaybe ["Error: Could not parse expression."]
-        $ maybeParseExpression s >>= result
-  in  unlines l
-
-main = interact $ linewise evaluate
