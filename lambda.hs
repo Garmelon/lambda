@@ -171,6 +171,28 @@ instance Show StrSymbol where
 instance Eq StrSymbol where
   (StrSymbol a) == (StrSymbol b) = a == b
 
+{-
+ - Interactive evaluation
+ -}
+
+linewise :: (String -> String) -> String -> String
+linewise f = unlines . map f . lines
+
+evaluateExpression :: String -> String
+evaluateExpression s =
+  let result = maybeParseExpression s >>= return
+                                        . map show
+                                        . evaluate
+                                        . fmap StrSymbol
+      l = fromMaybe ["Error: Could not parse expression."] result
+  in  unlines l
+-- evaluateExpression s = do
+--   expr <- maybeParseExpression s
+--   return . map show . evaluate expr
+
+main = interact $ linewise evaluateExpression
+
+{-
 _s = ESymbol
 _e = EExpr
 _r = EReference
@@ -212,3 +234,4 @@ main = do
   mapM_ print . evaluate $ (_e sn st)
   putStrLn "Evaluating... N F"
   mapM_ print . evaluate $ (_e sn sf)
+-}
