@@ -1,4 +1,6 @@
 import Data.List
+import Data.Maybe
+import Text.ParserCombinators.ReadP
 
 {-
  - The Expression type
@@ -51,6 +53,12 @@ instance (Eq s) => Eq (Expression s) where
   (ELambda _ a)  == (ELambda _ b)  = a == b
   _              == _              = False
 
+instance Functor Expression where
+  fmap f (EReference n) = EReference n
+  fmap f (ESymbol a)    = ESymbol (f a)
+  fmap f (ELambda s e)  = ELambda (f s) (fmap f e)
+  fmap f (EExpr a b)    = EExpr (fmap f a) (fmap f b)
+
 {-
  - Evaluating expressions
  -}
@@ -83,9 +91,77 @@ evaluate = takeWhileUnique . iterate apply
  - Parsing expressions
  -}
 
--- TODO
+parens :: [(Char, Char)]
+parens = [('(',')'),('[',']'),('{','}')]
 
+isOpeningParen :: Char -> Bool
+isOpeningParen a = isJust $ lookup a parens
+-- Pointfree alternative:
+-- isOpeningParen = isJust . flip lookup parens
 
+isClosingParen :: Char -> Char -> Bool
+isClosingParen a b = fromMaybe False $ (==b) <$> lookup a parens
+-- And as monad:
+-- isClosingParen a b = fromMaybe False $ do
+--   closing <- lookup a parens
+--   return $ closing == b
+-- And again as a monad:
+-- isClosingParen a b = fromMaybe False $ lookup a parens >>= return . (==b)
+
+parenthesize :: ReadP a -> ReadP a
+parenthesize parser = do
+  paren <- satisfy isOpeningParen
+  result <- parser
+  satisfy $ isClosingParen paren
+  return result
+
+parseSymbol :: ReadP (Expression String)
+parseSymbol = do
+  a <- munch1 (`elem` ['a'..'z'])
+  b <- munch (=='\'')
+  return $ ESymbol (a ++ b)
+
+parseLambda :: ReadP (Expression String)
+parseLambda = do
+  char '\\' +++ char 'λ'
+  (ESymbol s) <- parseSymbol
+  char '.'
+  e <- parseExpr
+  return $ ELambda s e
+
+parseExpr :: ReadP (Expression String)
+parseExpr =
+  let options =   parseSymbol
+              +++ parseLambda
+              +++ parenthesize parseExpr
+--   let options = choice [parseSymbol
+--                        ,parseLambda
+--                        ,parenthesize parseExpr
+--                        ]
+      parse = between skipSpaces skipSpaces options
+  in  chainl1 parse (return EExpr)
+
+findReferences :: (Eq s) => Expression s -> Expression s
+findReferences = find_ []
+  where find_ context sym@(ESymbol s)    = fromMaybe sym $ EReference <$> elemIndex s context
+        find_ context ref@(EReference _) = ref
+        find_ context (ELambda s e)      = ELambda s $ find_ (s:context) e
+        find_ context (EExpr a b)        = EExpr (find_ context a) (find_ context b)
+
+removeApostrophes :: String -> String
+removeApostrophes = reverse . dropWhile (=='\'') . reverse
+
+maybeParseExpression :: String -> Maybe (Expression String)
+maybeParseExpression s = do
+  let results = readP_to_S parseExpr s
+  (expr, _) <- safeLast results
+  return . fmap removeApostrophes . findReferences $ expr
+    where safeLast [] = Nothing
+          safeLast xs = Just $ last xs
+
+{-
+ - Testing output
+ -}
 
 -- Helper type for using arbitrary strings as symbols
 newtype StrSymbol = StrSymbol String
@@ -95,9 +171,6 @@ instance Show StrSymbol where
 
 instance Eq StrSymbol where
   (StrSymbol a) == (StrSymbol b) = a == b
-
---instance Read StrSymbol where
---  read s = StrSymbol s
 
 _s = ESymbol
 _e = EExpr
