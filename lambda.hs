@@ -1,3 +1,4 @@
+import Control.Monad
 import Data.List
 import Data.Maybe
 import Text.ParserCombinators.ReadP
@@ -91,22 +92,24 @@ evaluate = takeWhileUnique . iterate apply
  - Parsing expressions
  -}
 
+-- "munchified" versions of many, many1 and chainl1 that try to match as much as possible.
+many' :: ReadP a -> ReadP [a]
+many' p = many1' p <++ return []
+
+many1' :: ReadP a -> ReadP [a]
+many1' p = liftM2 (:) p (many' p)
+
+chainl1' :: ReadP a -> ReadP (a -> a -> a) -> ReadP a
+chainl1' p f = foldl1 <$> f <*> many1' p
+
 parens :: [(Char, Char)]
 parens = [('(',')'),('[',']'),('{','}')]
 
 isOpeningParen :: Char -> Bool
 isOpeningParen a = isJust $ lookup a parens
--- Pointfree alternative:
--- isOpeningParen = isJust . flip lookup parens
 
 isClosingParen :: Char -> Char -> Bool
 isClosingParen a b = fromMaybe False $ (==b) <$> lookup a parens
--- And as monad:
--- isClosingParen a b = fromMaybe False $ do
---   closing <- lookup a parens
---   return $ closing == b
--- And again as a monad:
--- isClosingParen a b = fromMaybe False $ lookup a parens >>= return . (==b)
 
 parenthesize :: ReadP a -> ReadP a
 parenthesize parser = do
@@ -134,12 +137,8 @@ parseExpr =
   let options =   parseSymbol
               +++ parseLambda
               +++ parenthesize parseExpr
---   let options = choice [parseSymbol
---                        ,parseLambda
---                        ,parenthesize parseExpr
---                        ]
       parse = between skipSpaces skipSpaces options
-  in  chainl1 parse (return EExpr)
+  in  chainl1' parse (return EExpr)
 
 findReferences :: (Eq s) => Expression s -> Expression s
 findReferences = find_ []
