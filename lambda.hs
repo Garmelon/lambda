@@ -1,3 +1,10 @@
+-- module Lambda
+-- ( Expression
+-- , showExpression
+-- , maybeParseExpression
+-- , evaluateExpression
+-- ) where
+
 import Control.Monad
 import Data.List
 import Data.Maybe
@@ -11,6 +18,24 @@ data Expression s = ESymbol s
                   | EReference Int
                   | EExpr (Expression s) (Expression s)
                   | ELambda s (Expression s)
+  deriving (Show)
+
+instance (Eq s) => Eq (Expression s) where
+  (ESymbol a)    == (ESymbol b)    = a == b
+  (EReference a) == (EReference b) = a == b
+  (EExpr a b)    == (EExpr c d)    = a == c && b == d
+  (ELambda _ a)  == (ELambda _ b)  = a == b
+  _              == _              = False
+
+instance Functor Expression where
+  fmap f (EReference n) = EReference n
+  fmap f (ESymbol a)    = ESymbol (f a)
+  fmap f (ELambda s e)  = ELambda (f s) (fmap f e)
+  fmap f (EExpr a b)    = EExpr (fmap f a) (fmap f b)
+
+{-
+ - Displaying expressions
+ -}
 
 -- list of names -> name -> unique name
 -- Find a unique name not in the list of names.
@@ -32,33 +57,20 @@ renameUniquely = rename_ []
         rename_ c (ELambda s e)  = let name = makeUnique c . show $ s
                                    in  ELambda name (rename_ (name : c) e)
 
-instance (Show s) => Show (Expression s) where
-  show = show_ [] . renameUniquely
-    -- show_ :: Expression String -> String
-    where show_ c (EReference n)
-            | n >= 0 && n < length c = c !! n
-            | otherwise              = "ERR" -- TODO: Deal with errors properly?
-          show_ c (ESymbol s)                             = s
-          show_ c (ELambda s e)                           = "\\" ++ s ++ "."  ++ show_ (s : c) e
-          show_ c (EExpr a@(ELambda _ _) b@(ELambda _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
-          show_ c (EExpr a@(ELambda _ _) b@(EExpr   _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
-          show_ c (EExpr a@(ELambda _ _) b              ) = "(" ++ show_ c a ++ ") "  ++ show_ c b
-          show_ c (EExpr a               b@(ELambda _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
-          show_ c (EExpr a               b@(EExpr   _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
-          show_ c (EExpr a               b)               =        show_ c a ++  " "  ++ show_ c b
-
-instance (Eq s) => Eq (Expression s) where
-  (ESymbol a)    == (ESymbol b)    = a == b
-  (EReference a) == (EReference b) = a == b
-  (EExpr a b)    == (EExpr c d)    = a == c && b == d
-  (ELambda _ a)  == (ELambda _ b)  = a == b
-  _              == _              = False
-
-instance Functor Expression where
-  fmap f (EReference n) = EReference n
-  fmap f (ESymbol a)    = ESymbol (f a)
-  fmap f (ELambda s e)  = ELambda (f s) (fmap f e)
-  fmap f (EExpr a b)    = EExpr (fmap f a) (fmap f b)
+showExpression :: (Show s) => Bool -> Expression s -> String
+showExpression unicode = show_ [] . renameUniquely
+  where show_ c (EReference n)
+          | n >= 0 && n < length c = c !! n
+          | otherwise              = "ERR" -- TODO: Deal with errors properly?
+        show_ c (ESymbol s)                             = s
+        show_ c (ELambda s e)                           = (if unicode then "λ" else "\\")
+                                                        ++ s ++ "."  ++ show_ (s : c) e
+        show_ c (EExpr a@(ELambda _ _) b@(ELambda _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
+        show_ c (EExpr a@(ELambda _ _) b@(EExpr   _ _)) = "(" ++ show_ c a ++ ") (" ++ show_ c b ++ ")"
+        show_ c (EExpr a@(ELambda _ _) b              ) = "(" ++ show_ c a ++ ") "  ++ show_ c b
+        show_ c (EExpr a               b@(ELambda _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
+        show_ c (EExpr a               b@(EExpr   _ _)) =        show_ c a ++  " (" ++ show_ c b ++ ")"
+        show_ c (EExpr a               b)               =        show_ c a ++  " "  ++ show_ c b
 
 {-
  - Evaluating expressions
@@ -85,8 +97,8 @@ takeWhileUnique l = map fst
                   $ takeWhile (\a -> not $ fst a `elem` snd a)
                   $ zip l (inits l)
 
-evaluate :: (Eq s) => Expression s -> [Expression s]
-evaluate = takeWhileUnique . iterate apply
+evaluateExpression :: (Eq s) => Expression s -> [Expression s]
+evaluateExpression = takeWhileUnique . iterate apply
 
 {-
  - Parsing expressions
@@ -174,14 +186,14 @@ instance Eq StrSymbol where
 linewise :: (String -> String) -> String -> String
 linewise f = unlines . map f . lines
 
-evaluateExpression :: String -> String
-evaluateExpression s =
+evaluate :: String -> String
+evaluate s =
   let result = return
-             . map show
-             . evaluate
+             . map (showExpression True)
+             . evaluateExpression
              . fmap StrSymbol
       l = fromMaybe ["Error: Could not parse expression."]
         $ maybeParseExpression s >>= result
   in  unlines l
 
-main = interact $ linewise evaluateExpression
+main = interact $ linewise evaluate
