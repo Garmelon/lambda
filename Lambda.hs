@@ -64,8 +64,8 @@ display unicode = d [] . renameUniquely
           | n >= 0 && n < length c = c !! n
           | otherwise              = "ERR"
         d c (ESymbol s) = s
-        d c (ELambda s e@(ELambda _ _)) = l ++ s ++ " " ++ (tail $ d (s:c) e)
-        d c (ELambda s e)               = l ++ s ++ "." ++         d (s:c) e
+        d c (ELambda s e@(ELambda _ _)) = l ++ s ++ " " ++ (tail $ d (s : c) e)
+        d c (ELambda s e)               = l ++ s ++ "." ++         d (s : c) e
         d c (EExpr a@(ELambda _ _) b@(ELambda _ _)) = "(" ++ d c a ++ ") (" ++ d c b ++ ")"
         d c (EExpr a@(ELambda _ _) b@(EExpr _ _)  ) = "(" ++ d c a ++ ") (" ++ d c b ++ ")"
         d c (EExpr a               b@(ELambda _ _)) =        d c a ++  " (" ++ d c b ++ ")"
@@ -115,13 +115,16 @@ chainl1' :: ReadP a -> ReadP (a -> a -> a) -> ReadP a
 chainl1' p f = foldl1 <$> f <*> many1' p
 
 parens :: [(Char, Char)]
-parens = [('(',')'),('[',']'),('{','}')]
+parens = [ ('(', ')')
+         , ('[', ']')
+         , ('{', '}')
+         ]
 
 isOpeningParen :: Char -> Bool
 isOpeningParen a = isJust $ lookup a parens
 
 isClosingParen :: Char -> Char -> Bool
-isClosingParen a b = fromMaybe False $ (==b) <$> lookup a parens
+isClosingParen a b = fromMaybe False $ (== b) <$> lookup a parens
 
 parenthesize :: ReadP a -> ReadP a
 parenthesize parser = do
@@ -159,11 +162,11 @@ findReferences :: (Eq s) => Expression s -> Expression s
 findReferences = find_ []
   where find_ context sym@(ESymbol s)    = fromMaybe sym $ EReference <$> elemIndex s context
         find_ context ref@(EReference _) = ref
-        find_ context (ELambda s e)      = ELambda s $ find_ (s:context) e
+        find_ context (ELambda s e)      = ELambda s $ find_ (s : context) e
         find_ context (EExpr a b)        = EExpr (find_ context a) (find_ context b)
 
 removeApostrophes :: String -> String
-removeApostrophes = reverse . dropWhile (=='\'') . reverse
+removeApostrophes = reverse . dropWhile (== '\'') . reverse
 
 parseMaybe :: String -> Maybe (Expression String)
 parseMaybe s = do
