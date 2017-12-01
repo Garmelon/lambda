@@ -10,6 +10,7 @@ instance Show StrSymbol where
 instance Eq StrSymbol where
   (StrSymbol a) == (StrSymbol b) = a == b
 
+-- process a string line by line instead of all at once
 linewise :: (String -> String) -> String -> String
 linewise f = unlines . map f . lines
 
