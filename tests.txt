@@ -1,0 +1,8 @@
+\a.a
+(\a b.a b) (\c.c) d
+(\x.x x) (\x.x x)
+(\x.x (\a b.b) (\a b.a)) (\a b.a)
+(\x.x (\a b.b) (\a b.a)) (\a b.b)
+(\f.(\x.f(x x))(\x.f(x x))) (\a b.a)
+(\f.(\x.f(x x))(\x.f(x x))) (\a b.b)
+(\f.(\x.f(x x))(\x.f(x x))) (\f a.a f a) (\a b.a) (\a b.a) (\a b.b) (\a b.a)
